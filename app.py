@@ -1,433 +1,88 @@
-import streamlit as st
 import os
-import time
 import io
 import zipfile
-from downloader import download_video_or_playlist
+import shutil
 
-# ------------------- THEME CSS (ULTIMATE: MINIMALIST, PROFESSIONAL ALIGNMENT) -------------------
-def load_theme(dark=True):
-    if dark:
-        st.markdown("""
-        <style>
-        /* Global Styles: Clean & Modern */
-        body { 
-            background: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 100%); 
-            color: #e0e0e0; 
-            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-        }
-        
-        /* Subtle Glassmorphism */
-        .glass {
-            background: rgba(255,255,255,0.02);
-            backdrop-filter: blur(20px);
-            padding: 28px;
-            border-radius: 20px;
-            border: 1px solid rgba(255,255,255,0.1);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-            margin-bottom: 20px;
-        }
-        
-        /* Title: Bold & Centered */
-        .title {
-            font-size: 40px;
-            font-weight: 700;
-            color: #ffffff;
-            margin-bottom: 30px;
-            text-align: center;
-            letter-spacing: -0.5px;
-        }
-        
-        /* Buttons: Sleek & Full-Width */
-        .stButton > button {
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-            color: #ffffff;
-            border: none;
-            border-radius: 12px;
-            padding: 14px 28px;
-            font-weight: 600;
-            font-size: 16px;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 10px rgba(79,70,229,0.3);
-            width: 100%;
-            text-align: center;
-            height: 50px;
-        }
-        .stButton > button:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 15px rgba(79,70,229,0.4);
-            background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
-        }
-        
-        /* Subtle Fade-in */
-        .fade-in {
-            animation: fadeIn 1s ease-out;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(15px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        /* Sidebar: Refined */
-        section[data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #0a0a0a 0%, #1a1a1a 100%);
-            border-right: 1px solid rgba(255,255,255,0.05);
-        }
-        
-        /* Inputs & Selects: Clean Borders */
-        .stTextInput > div > div > input,
-        .stSelectbox > div > div > select {
-            background: rgba(255,255,255,0.05);
-            border: 1px solid rgba(255,255,255,0.2);
-            border-radius: 10px;
-            color: #e0e0e0;
-            padding: 12px;
-            width: 100%;
-            height: 45px;
-        }
-        .stTextInput > div > div > input:focus,
-        .stSelectbox > div > div > select:focus {
-            border-color: #4f46e5;
-            box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
-        }
-        
-        /* Preview Section */
-        .preview-section {
-            background: rgba(255,255,255,0.02);
-            border-radius: 16px;
-            padding: 20px;
-            margin: 20px 0;
-            animation: fadeIn 1s ease-out;
-        }
-        
-        /* Columns: Perfect Spacing */
-        .block-container {
-            padding-top: 2rem;
-        }
-        [data-testid="column"] {
-            padding: 0 8px;
-        }
-        
-        /* Success/Error: Styled */
-        .stSuccess > div > div {
-            background: rgba(34,197,94,0.2);
-            border-radius: 10px;
-            border-left: 4px solid #22c55e;
-        }
-        .stError > div > div {
-            background: rgba(239,68,68,0.2);
-            border-radius: 10px;
-            border-left: 4px solid #ef4444;
-        }
+# ------------------------------
+# VIDEO QUALITY OPTIONS (PRE-MERGED, NO AUDIO MERGE)
+# ------------------------------
+VIDEO_OPTIONS = {
+    "144p": "best[height<=144][ext=mp4]/best[height<=144]",
+    "240p": "best[height<=240][ext=mp4]/best[height<=240]",
+    "360p": "best[height<=360][ext=mp4]/best[height<=360]",
+    "480p": "best[height<=480][ext=mp4]/best[height<=480]",
+    "720p": "best[height<=720][ext=mp4]/best[height<=720]",
+    "1080p": "best[height<=1080][ext=mp4]/best[height<=1080]",
+    "1440p (2K)": "best[height<=1440][ext=mp4]/best[height<=1440]",
+    "2160p (4K)": "best[height<=2160][ext=mp4]/best[height<=2160]",
+    "Best": "best[ext=mp4]/best",
+}
 
-        /* Progress Bar: Custom */
-        .stProgress > div > div > div {
-            background: linear-gradient(90deg, #4f46e5, #7c3aed);
-        }
-        </style>
-        """, unsafe_allow_html=True)
-    else:
-        st.markdown("""
-        <style>
-        /* Light Theme: Clean & Modern */
-        body { 
-            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%); 
-            color: #334155; 
-            font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-        }
-        
-        /* Subtle Glassmorphism */
-        .glass {
-            background: rgba(255,255,255,0.8);
-            backdrop-filter: blur(20px);
-            padding: 28px;
-            border-radius: 20px;
-            border: 1px solid rgba(0,0,0,0.05);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-            margin-bottom: 20px;
-        }
-        
-        /* Title: Bold & Centered */
-        .title {
-            font-size: 40px;
-            font-weight: 700;
-            color: #1e293b;
-            margin-bottom: 30px;
-            text-align: center;
-            letter-spacing: -0.5px;
-        }
-        
-        /* Buttons: Sleek & Full-Width */
-        .stButton > button {
-            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
-            color: #ffffff;
-            border: none;
-            border-radius: 12px;
-            padding: 14px 28px;
-            font-weight: 600;
-            font-size: 16px;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 10px rgba(79,70,229,0.3);
-            width: 100%;
-            text-align: center;
-            height: 50px;
-        }
-        .stButton > button:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 15px rgba(79,70,229,0.4);
-            background: linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
-        }
-        
-        /* Subtle Fade-in */
-        .fade-in {
-            animation: fadeIn 1s ease-out;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(15px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        /* Sidebar: Refined */
-        section[data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-            border-right: 1px solid rgba(0,0,0,0.05);
-        }
-        
-        /* Inputs & Selects: Clean Borders */
-        .stTextInput > div > div > input,
-        .stSelectbox > div > div > select {
-            background: rgba(255,255,255,0.9);
-            border: 1px solid rgba(0,0,0,0.1);
-            border-radius: 10px;
-            color: #334155;
-            padding: 12px;
-            width: 100%;
-            height: 45px;
-        }
-        .stTextInput > div > div > input:focus,
-        .stSelectbox > div > div > select:focus {
-            border-color: #4f46e5;
-            box-shadow: 0 0 0 3px rgba(79,70,229,0.1);
-        }
-        
-        /* Preview Section */
-        .preview-section {
-            background: rgba(255,255,255,0.8);
-            border-radius: 16px;
-            padding: 20px;
-            margin: 20px 0;
-            animation: fadeIn 1s ease-out;
-        }
-        
-        /* Columns: Perfect Spacing */
-        .block-container {
-            padding-top: 2rem;
-        }
-        [data-testid="column"] {
-            padding: 0 8px;
-        }
-        
-        /* Success/Error: Styled */
-        .stSuccess > div > div {
-            background: rgba(34,197,94,0.2);
-            border-radius: 10px;
-            border-left: 4px solid #22c55e;
-        }
-        .stError > div > div {
-            background: rgba(239,68,68,0.2);
-            border-radius: 10px;
-            border-left: 4px solid #ef4444;
-        }
-
-        /* Progress Bar: Custom */
-        .stProgress > div > div > div {
-            background: linear-gradient(90deg, #4f46e5, #7c3aed);
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
-# ------------------- YOUTUBE INFO FETCH -------------------
-def get_info(url):
+def download_video_or_playlist(
+    url,
+    download_path='downloads',
+    download_type='video',
+    quality='Best',
+    content_type='Video',
+    zip_output=False,
+    zip_filename="downloaded_videos.zip",
+    progress_hook=None
+):
+    import yt_dlp
+    # Clean folder
+    if os.path.exists(download_path):
+        shutil.rmtree(download_path)
+    os.makedirs(download_path, exist_ok=True)
+    
+    # Format: Always video, pre-merged MP4 (no FFmpeg needed)
+    ydl_format = VIDEO_OPTIONS.get(quality, "best[ext=mp4]/best")
+    
+    is_playlist = (content_type == "Playlist")
+    
+    # YT-DLP Options: No merging, robust error handling
+    ydl_opts = {
+        "format": ydl_format,
+        "ignoreerrors": True,
+        "quiet": True,
+        "outtmpl": os.path.join(download_path, "%(title)s.%(ext)s"),
+        "noplaylist": not is_playlist,
+        "extract_flat": False,
+        "progress_hooks": [progress_hook] if progress_hook else [],
+        "merge_output_format": None,  # Disable merging to avoid FFmpeg
+        "no_warnings": True,  # Suppress yt-dlp warnings
+    }
+    
+    # No postprocessors (no audio extraction)
+    
+    # Download
+    playlist_titles = []
     try:
-        import yt_dlp
-        ydl_opts = {"quiet": True, "skip_download": True}
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            return info
-    except:
-        return None
-
-# ------------------- STREAMLIT PAGES -------------------
-st.set_page_config(
-    page_title="RAVANA YT DOWNLOADER", 
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
-menu = st.sidebar.radio("Menu", ["Home", "About"])
-theme_switch = st.sidebar.toggle("Dark Theme", value=True)
-load_theme(theme_switch)
-
-if menu == "About":
-    st.markdown("<div class='title'>About Ravana YT Downloader</div>", unsafe_allow_html=True)
-    st.markdown('<div class="glass fade-in">', unsafe_allow_html=True)
-    col1, col2 = st.columns(2)
-    with col1:
-        st.write("**Features:**")
-        st.write("• High-quality video downloads (144p–4K)")
-        st.write("• Audio extraction (64–320kbps MP3)")
-        st.write("• Playlist support with ZIP export")
-        st.write("• Metadata preview & fast processing")
-    with col2:
-        st.write("**Created by:**")
-        st.write("Devulapalli Abhiram (RAVANA)")
-        st.write("**Tech Stack:**")
-        st.write("• Streamlit • yt-dlp • FFmpeg")
-    st.markdown('</div>', unsafe_allow_html=True)
-    st.stop()
-
-# ------------------- HOME PAGE -------------------
-st.markdown("<div class='title'>Ravana YT Downloader</div>", unsafe_allow_html=True)
-
-# Input Section
-st.markdown('<div class="glass fade-in">', unsafe_allow_html=True)
-st.header("Enter Details")
-url_col1, url_col2 = st.columns([3, 1])
-with url_col1:
-    url = st.text_input("YouTube URL", placeholder="https://www.youtube.com/watch?v=...", help="Paste a single video or playlist URL")
-with url_col2:
-    preview_clicked = st.button("Preview", key="preview_btn")
-
-options_col1, options_col2, options_col3 = st.columns(3)
-with options_col1:
-    mode = st.selectbox("Mode", ["Video", "Audio", "Playlist"], help="Choose download type")
-with options_col2:
-    video_quality = st.selectbox("Video Quality", ["144p", "240p", "360p", "480p", "720p", "1080p", "1440p (2K)", "2160p (4K)"])
-with options_col3:
-    audio_quality = st.selectbox("Audio Quality (kbps)", ["64", "128", "192", "256", "320"])
-
-st.markdown('</div>', unsafe_allow_html=True)
-
-# Preview Section
-if url and preview_clicked:
-    with st.spinner("Fetching details..."):
-        info = get_info(url)
-    if info:
-        st.markdown('<div class="preview-section">', unsafe_allow_html=True)
-        st.header("Preview")
-        preview_col1, preview_col2 = st.columns([1, 3])
-        with preview_col1:
-            st.image(info.get("thumbnail"), use_column_width=True)
-        with preview_col2:
-            st.subheader(info.get("title", "N/A"))
-            st.write(f"**Duration:** {info.get('duration', 'N/A')} seconds")
-            st.write(f"**Views:** {info.get('view_count', 'N/A'):,}")
-            st.write(f"**Uploader:** {info.get('uploader', 'N/A')}")
-        
-        # Playlist Preview
-        if mode == "Playlist" and "entries" in info:
-            st.subheader("Playlist Contents (First 5)")
-            for i, entry in enumerate(info["entries"][:5], 1):
-                st.write(f"{i}. {entry.get('title', 'N/A')}")
-            if len(info["entries"]) > 5:
-                st.write(f"... and {len(info['entries']) - 5} more")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-# Download Section
-st.markdown('<div class="glass fade-in">', unsafe_allow_html=True)
-st.header("Download")
-if st.button("Start Download", key="download_btn"):
-    if not url:
-        st.error("Please enter a YouTube URL first.")
-    else:
-        # FFmpeg Warning Handling
-        try:
-            import subprocess
-            subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
-            ffmpeg_installed = True
-        except:
-            ffmpeg_installed = False
-            if mode == "Video":
-                st.warning("⚠️ FFmpeg not detected. Video may download as separate audio/video files without merging. Install FFmpeg for best quality.")
-        
-        progress_bar = st.progress(0)
-        status_text = st.empty()
-        
-        with st.spinner("Processing your request..."):
-            zip_name = "playlist"
-            if mode == "Playlist":
-                zip_name = st.text_input("ZIP Filename", value="playlist_downloads", key="zip_name_input")
-            
-            download_type = "video" if mode in ["Video", "Playlist"] else "audio"
-            quality = video_quality if mode != "Audio" else audio_quality
-            
-            # Progress callback
-            def progress_hook(d):
-                if d['status'] == 'downloading':
-                    percent = d.get('_percent_str', '0%')
-                    speed = d.get('_speed_str', 'N/A')
-                    status_text.text(f"Downloading: {percent} | Speed: {speed}")
-                    if d.get('_percent_str'):
-                        try:
-                            p = float(d['_percent_str'].replace('%', '')) / 100
-                            progress_bar.progress(p)
-                        except:
-                            pass
-                elif d['status'] == 'finished':
-                    status_text.text("Post-processing...")
-            
-            result, titles = download_video_or_playlist(
-                url=url,
-                download_type=download_type,
-                quality=quality,
-                content_type=mode,
-                zip_output=(mode == "Playlist"),
-                zip_filename=f"{zip_name}.zip",
-                progress_hook=progress_hook  # Pass the hook
-            )
-            
-            progress_bar.progress(1.0)
-            status_text.text("Complete!")
-            
-            if result is None:
-                st.error("Download failed. Please check the URL and try again.")
+            info = ydl.extract_info(url, download=True)
+            if is_playlist and "entries" in info:
+                playlist_titles = [e.get("title", "Unknown") for e in info["entries"] if e]
             else:
-                st.success("Download prepared successfully!")
-                
-                # Titles List
-                st.subheader("Downloaded Items")
-                for i, title in enumerate(titles, 1):
-                    st.write(f"{i}. {title}")
-                
-                # Download Buttons
-                if mode == "Playlist" and isinstance(result, bytes):
-                    st.download_button(
-                        "Download ZIP Archive",
-                        data=result,
-                        file_name=f"{zip_name}.zip",
-                        mime="application/zip",
-                        use_container_width=True
-                    )
-                elif isinstance(result, list):
-                    for file_path in result:
-                        with open(file_path, "rb") as f:
-                            fname = os.path.basename(file_path)
-                            st.download_button(
-                                f"Download {fname}",
-                                data=f,
-                                file_name=fname,
-                                use_container_width=True
-                            )
-                else:
-                    with open(result, "rb") as f:
-                        label = "Download Video" if mode == "Video" else "Download Audio"
-                        st.download_button(
-                            label,
-                            data=f,
-                            file_name=os.path.basename(result),
-                            use_container_width=True
-                        )
-st.markdown('</div>', unsafe_allow_html=True)
-
-# Footer
-st.markdown("---")
-st.markdown("<div style='text-align: center; font-size: 14px; color: #94a3b8;'>© 2025 Ravana YT Downloader | Built with Streamlit</div>", unsafe_allow_html=True)
+                playlist_titles = [info.get("title", "Unknown")]
+    except Exception as e:
+        print(f"Download error: {e}")
+        return None, []
+    
+    # Collect files
+    downloaded_files = [os.path.join(root, f) for root, _, files in os.walk(download_path) for f in files]
+    
+    if not downloaded_files:
+        return None, playlist_titles
+    
+    # ZIP if needed
+    if zip_output and is_playlist and len(downloaded_files) > 1:
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as z:
+            for file in downloaded_files:
+                z.write(file, os.path.basename(file))
+        zip_buffer.seek(0)
+        return zip_buffer.getvalue(), playlist_titles
+    
+    # Single or list
+    if not is_playlist:
+        return downloaded_files[0], playlist_titles
+    return downloaded_files, playlist_titles
