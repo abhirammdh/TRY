@@ -1,105 +1,103 @@
-import yt_dlp
 import os
-import shutil
-
-# ---------------------------------------------
-# Clean folder before downloads
-# ---------------------------------------------
-def clean_folder(folder):
-    if os.path.exists(folder):
-        shutil.rmtree(folder)
-    os.makedirs(folder)
+import yt_dlp
+from io import BytesIO
+import zipfile
 
 
-# ---------------------------------------------
-# DOWNLOAD SINGLE VIDEO (VIDEO ONLY)
-# ---------------------------------------------
-def download_video(url, quality, output_folder="output"):
-    clean_folder(output_folder)
-
-    # Map UI quality → yt-dlp format
-    video_format_map = {
-        "144p": "bestvideo[height=144]",
-        "240p": "bestvideo[height=240]",
-        "360p": "bestvideo[height=360]",
-        "480p": "bestvideo[height=480]",
-        "720p": "bestvideo[height=720]",
-        "1080p": "bestvideo[height=1080]",
-        "1440p (2K)": "bestvideo[height=1440]",
-        "2160p (4K)": "bestvideo[height=2160]"
-    }
-
-    fmt = video_format_map.get(quality, "bestvideo")
-
-    ydl_opts = {
-        "format": fmt,       # VIDEO ONLY
-        "outtmpl": f"{output_folder}/%(title)s.%(ext)s",
-        "merge_output_format": None,  # no merging at all
-    }
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        filename = ydl.prepare_filename(info)
-        return filename
+# ---------------------------
+#  VIDEO QUALITY MAP
+# ---------------------------
+VIDEO_FORMATS = {
+    "240p": "bestvideo[height<=240]+bestaudio/best",
+    "360p": "bestvideo[height<=360]+bestaudio/best",
+    "480p": "bestvideo[height<=480]+bestaudio/best",
+    "720p": "bestvideo[height<=720]+bestaudio/best",
+    "1080p": "bestvideo[height<=1080]+bestaudio/best",
+    "1440p (2K)": "bestvideo[height<=1440]+bestaudio/best",
+    "2160p (4K)": "bestvideo[height<=2160]+bestaudio/best",
+}
 
 
-
-# ---------------------------------------------
-# DOWNLOAD AUDIO ONLY
-# ---------------------------------------------
-def download_audio(url, quality, output_folder="output"):
-    clean_folder(output_folder)
-
-    # Map UI → yt-dlp audio bitrates
-    audio_quality_map = {
-        "60kbps": "60",
-        "128kbps": "128",
-        "192kbps": "192",
-        "256kbps": "256",
-        "320kbps": "320",
-        "360kbps": "360"
-    }
-
-    abr = audio_quality_map.get(quality, "128")
-
-    ydl_opts = {
-        "format": "bestaudio",        # AUDIO ONLY
-        "outtmpl": f"{output_folder}/%(title)s.%(ext)s",
-        "postprocessors": [
-            {
-                "key": "FFmpegAudioConvertor",
-                "preferredcodec": "mp3",
-                "preferredquality": abr
-            }
-        ]
-    }
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-        filename = ydl.prepare_filename(info)
-        return filename.replace(".webm", ".mp3").replace(".m4a", ".mp3")
+# ---------------------------
+#  AUDIO QUALITY MAP
+# ---------------------------
+AUDIO_FORMATS = {
+    "60kbps": "bestaudio[abr<=60]",
+    "128kbps": "bestaudio[abr<=128]",
+    "192kbps": "bestaudio[abr<=192]",
+    "256kbps": "bestaudio[abr<=256]",
+    "320kbps": "bestaudio[abr<=320]",
+    "360kbps": "bestaudio[abr<=360]",
+}
 
 
-
-# ---------------------------------------------
-# PLAYLIST DOWNLOAD (EACH ITEM SEPARATELY)
-# ---------------------------------------------
+# ----------------------------------------------------
+#   EXTRACT PLAYLIST ITEMS (TITLE + URL)
+# ----------------------------------------------------
 def get_playlist_items(url):
-    """Return playlist items (title + URL) without downloading."""
     ydl_opts = {"quiet": True, "extract_flat": True}
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-        if "entries" not in info:
-            return []
+        data = ydl.extract_info(url, download=False)
 
-        items = []
-        for entry in info["entries"]:
-            if entry:
-                items.append({
-                    "title": entry.get("title"),
-                    "url": f"https://www.youtube.com/watch?v={entry.get('id')}"
-                })
+    entries = data.get("entries", [])
+    playlist = []
 
-        return items
+    for e in entries:
+        playlist.append({
+            "title": e.get("title", "No title"),
+            "url": f"https://www.youtube.com/watch?v={e.get('id')}"
+        })
 
+    return playlist
+
+
+# ----------------------------------------------------
+#   DOWNLOAD SINGLE VIDEO
+# ----------------------------------------------------
+def download_video(url, quality):
+    fmt = VIDEO_FORMATS.get(quality, "bestvideo+bestaudio")
+    output = "output_video.%(ext)s"
+
+    ydl_opts = {
+        "format": fmt,
+        "outtmpl": output,
+        "quiet": True,
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+
+    # Find downloaded file
+    for ext in ("mp4", "mkv", "webm"):
+        if os.path.exists(f"output_video.{ext}"):
+            return f"output_video.{ext}"
+
+    return None
+
+
+# ----------------------------------------------------
+#   DOWNLOAD SINGLE AUDIO
+# ----------------------------------------------------
+def download_audio(url, quality):
+    fmt = AUDIO_FORMATS.get(quality, "bestaudio")
+    output = "output_audio.%(ext)s"
+
+    ydl_opts = {
+        "format": fmt,
+        "outtmpl": output,
+        "quiet": True,
+        "postprocessors": [{
+            "key": "FFmpegExtractAudio",
+            "preferredcodec": "mp3",
+            "preferredquality": "192",
+        }]
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+
+    if os.path.exists("output_audio.mp3"):
+        return "output_audio.mp3"
+
+    return None
