@@ -1,103 +1,44 @@
+import streamlit as st
 import os
-import yt_dlp
-from io import BytesIO
-import zipfile
+from downloader import download_video_or_playlist
 
+st.set_page_config(page_title="Ravana Downloader", layout="centered")
 
-# ---------------------------
-#  VIDEO QUALITY MAP
-# ---------------------------
-VIDEO_FORMATS = {
-    "240p": "bestvideo[height<=240]+bestaudio/best",
-    "360p": "bestvideo[height<=360]+bestaudio/best",
-    "480p": "bestvideo[height<=480]+bestaudio/best",
-    "720p": "bestvideo[height<=720]+bestaudio/best",
-    "1080p": "bestvideo[height<=1080]+bestaudio/best",
-    "1440p (2K)": "bestvideo[height<=1440]+bestaudio/best",
-    "2160p (4K)": "bestvideo[height<=2160]+bestaudio/best",
-}
+st.title("🔥 Ravana YouTube Downloader")
 
+# --- Input UI ---
+url = st.text_input("Enter YouTube Video or Playlist URL")
 
-# ---------------------------
-#  AUDIO QUALITY MAP
-# ---------------------------
-AUDIO_FORMATS = {
-    "60kbps": "bestaudio[abr<=60]",
-    "128kbps": "bestaudio[abr<=128]",
-    "192kbps": "bestaudio[abr<=192]",
-    "256kbps": "bestaudio[abr<=256]",
-    "320kbps": "bestaudio[abr<=320]",
-    "360kbps": "bestaudio[abr<=360]",
-}
+col1, col2 = st.columns(2)
 
+with col1:
+    mode = st.selectbox("Choose Type", ["video", "audio"])
 
-# ----------------------------------------------------
-#   EXTRACT PLAYLIST ITEMS (TITLE + URL)
-# ----------------------------------------------------
-def get_playlist_items(url):
-    ydl_opts = {"quiet": True, "extract_flat": True}
+with col2:
+    quality = st.selectbox("Video Quality", ["360p", "480p", "720p", "1080p"])
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        data = ydl.extract_info(url, download=False)
+# Button
+if st.button("Download"):
+    if not url.strip():
+        st.error("Please enter a valid YouTube URL")
+    else:
+        with st.spinner("Downloading... please wait ⚡"):
+            try:
+                files = download_video_or_playlist(url, quality, mode)
 
-    entries = data.get("entries", [])
-    playlist = []
+                st.success("🎉 Download Completed!")
 
-    for e in entries:
-        playlist.append({
-            "title": e.get("title", "No title"),
-            "url": f"https://www.youtube.com/watch?v={e.get('id')}"
-        })
+                # Show download buttons for each file
+                for file in files:
+                    if os.path.exists(file):
+                        st.download_button(
+                            label=f"Download {os.path.basename(file)}",
+                            data=open(file, "rb"),
+                            file_name=os.path.basename(file)
+                        )
+                    else:
+                        st.warning("File not found after download.")
 
-    return playlist
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
 
-
-# ----------------------------------------------------
-#   DOWNLOAD SINGLE VIDEO
-# ----------------------------------------------------
-def download_video(url, quality):
-    fmt = VIDEO_FORMATS.get(quality, "bestvideo+bestaudio")
-    output = "output_video.%(ext)s"
-
-    ydl_opts = {
-        "format": fmt,
-        "outtmpl": output,
-        "quiet": True,
-    }
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
-
-    # Find downloaded file
-    for ext in ("mp4", "mkv", "webm"):
-        if os.path.exists(f"output_video.{ext}"):
-            return f"output_video.{ext}"
-
-    return None
-
-
-# ----------------------------------------------------
-#   DOWNLOAD SINGLE AUDIO
-# ----------------------------------------------------
-def download_audio(url, quality):
-    fmt = AUDIO_FORMATS.get(quality, "bestaudio")
-    output = "output_audio.%(ext)s"
-
-    ydl_opts = {
-        "format": fmt,
-        "outtmpl": output,
-        "quiet": True,
-        "postprocessors": [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192",
-        }]
-    }
-
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
-
-    if os.path.exists("output_audio.mp3"):
-        return "output_audio.mp3"
-
-    return None
