@@ -1,7 +1,6 @@
-
 import streamlit as st
-import yt_dlp
 import os
+from downloader import download_youtube   # <-- NEW IMPORT
 
 # -------------------- PAGE CONFIG --------------------
 st.set_page_config(
@@ -30,11 +29,6 @@ body {
     border: 1px solid rgba(255,255,255,0.08) !important;
 }
 
-.sidebar .sidebar-content {
-    background: #121212 !important;
-}
-
-/* Button Styling */
 button {
     border-radius: 10px !important;
     transition: 0.3s ease-in-out;
@@ -43,14 +37,12 @@ button:hover {
     transform: scale(1.03);
 }
 
-/* Title */
 h1 {
     color: #e03131 !important;
     text-align: center;
     font-weight: 700 !important;
 }
 
-/* Card */
 .glass-card {
     background: rgba(255,255,255,0.06);
     border-radius: 20px;
@@ -88,24 +80,6 @@ def progress_hook(d):
     elif d['status'] == 'finished':
         status_text.text("Processing video...")
 
-# -------------------- DOWNLOAD FUNCTION --------------------
-def download_youtube(url, folder):
-    if not os.path.exists(folder):
-        os.makedirs(folder)
-
-    ydl_opts = {
-        "format": "best",
-        "outtmpl": f"{folder}/%(title)s.%(ext)s",
-        "progress_hooks": [progress_hook],
-    }
-
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-        return True, "Download completed successfully."
-    except Exception as e:
-        return False, "Error: " + str(e)
-
 # -------------------- SINGLE VIDEO --------------------
 if menu == "Single Video":
     st.subheader("Download Single Video")
@@ -116,7 +90,7 @@ if menu == "Single Video":
     if st.button("Download Video"):
         if url:
             st.info("Starting download...")
-            success, msg = download_youtube(url, folder)
+            success, msg = download_youtube(url, folder, progress_hook)
             if success:
                 st.success(msg)
             else:
@@ -132,12 +106,10 @@ elif menu == "Playlist":
     if st.button("Download Playlist"):
         if url:
             st.info("Starting playlist download...")
-            success, msg = download_youtube(url, folder)
+            success, msg = download_youtube(url, folder, progress_hook)
             if success:
                 st.success(msg)
             else:
                 st.error(msg)
 
 st.markdown("</div>", unsafe_allow_html=True)
-
-
