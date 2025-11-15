@@ -1,195 +1,164 @@
 import streamlit as st
 import os
-import json
-import time
 from downloader import download_video_or_playlist
 
-# -----------------------------------------------------------
-# CONFIG
-# -----------------------------------------------------------
-st.set_page_config(
-    page_title="Ravana Downloader",
-    layout="centered",
-    page_icon="🔥"
-)
 
+st.set_page_config(page_title="Ravana YT Downloader", layout="wide")
 
-# -----------------------------------------------------------
-# THEME TOGGLE (Light / Dark)
-# -----------------------------------------------------------
+# ---------------------------------------------------------
+# THEME SWITCHER
+# ---------------------------------------------------------
 if "theme" not in st.session_state:
-    st.session_state.theme = "dark"
+    st.session_state.theme = "light"
 
 def toggle_theme():
-    st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
+    st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
 
-theme_button = "🌙 Dark Mode" if st.session_state.theme == "light" else "☀️ Light Mode"
-st.button(theme_button, on_click=toggle_theme)
+# COLORS
+if st.session_state.theme == "dark":
+    BG = "#000000"
+    TEXT = "#00ff66"
+else:
+    BG = "#ffffff"
+    TEXT = "#6a0dad"
 
-# Custom CSS (no glow, smooth animations)
-st.markdown(
-    f"""
-    <style>
-        body {{
-            background-color: {"#0d0d0d" if st.session_state.theme=="dark" else "#ffffff"};
-            color: {"white" if st.session_state.theme=="dark" else "black"};    
-        }}
+st.markdown(f"""
+<style>
+body {{
+    background-color: {BG};
+    color: {TEXT};
+}}
+.stButton>button {{
+    background-color: transparent;
+    color: {TEXT};
+    border: 2px solid {TEXT};
+    padding: 10px 20px;
+    border-radius: 10px;
+    transition: 0.3s;
+}}
+.stButton>button:hover {{
+    transform: scale(1.05);
+}}
+</style>
+""", unsafe_allow_html=True)
 
-        .download-btn {{
-            padding: 10px 20px;
-            border-radius: 12px;
-            background: #ff4d4d;
-            color: white;
-            border: none;
-            font-size: 18px;
-            transition: 0.2s ease-in-out;
-        }}
+# ---------------------------------------------------------
+# SIDEBAR
+# ---------------------------------------------------------
+st.sidebar.title("⚙ Settings")
+if st.sidebar.button("Toggle Theme"):
+    toggle_theme()
 
-        .download-btn:hover {{
-            transform: scale(1.05);
-            background: #e60000;
-        }}
-
-        .nav {{
-            text-align: center;
-            margin-bottom: 20px;
-        }}
-
-        .nav button {{
-            padding: 10px 18px;
-            border-radius: 10px;
-            margin: 0 10px;
-            background: #333;
-            color: white;
-            border: none;
-            transition: 0.2s;
-        }}
-
-        .nav button:hover {{
-            background: #555;
-        }}
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# -----------------------------------------------------------
-# Navigation (Home / Downloader / Credits)
-# -----------------------------------------------------------
-pages = ["Home", "Downloader", "Credits"]
-choice = st.radio("Navigation", pages, horizontal=True)
+page = st.sidebar.radio("Navigate", ["Home", "Download", "History", "About"])
 
 
-# -----------------------------------------------------------
+# ---------------------------------------------------------
+# GLOBAL HISTORY
+# ---------------------------------------------------------
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+
+# ---------------------------------------------------------
 # HOME PAGE
-# -----------------------------------------------------------
-if choice == "Home":
-    st.title("🔥 Ravana YouTube Downloader")
-    st.subheader("Fast • Clean • Secure")
+# ---------------------------------------------------------
+if page == "Home":
+    st.title("🔥 Ravana YT Downloader")
+    st.write("""
+    Welcome to **Ravana YouTube Downloader**, the most powerful downloader built with:
 
-    st.markdown("""
-    🚀 **Features:**
-    - ✨ Video Downloader  
-    - 🎵 Audio Downloader  
-    - 🎞 Playlist Download  
-    - 📥 Progress Bar  
-    - 🕒 Download History  
-    - 🌗 Dark Mode  
-    - ⚡ Smooth UI Animations  
-    - 🧩 No watermark  
+    ✔ Fast video/audio downloads  
+    ✔ Up to **4K MP4**  
+    ✔ Pure **M4A audio**  
+    ✔ Download playlist fully  
+    ✔ Beautiful dark/light themes  
+    ✔ Full progress bar  
+    ✔ No cookies required  
     """)
 
-    st.image(
-        "https://i.ibb.co/6rJ6fCy/yt-banner.jpg",
-        caption="Ravana Downloader",
-        use_container_width=True
-    )
 
-    st.info("Go to the **Downloader** tab to start downloading 🔥")
+# ---------------------------------------------------------
+# DOWNLOAD PAGE
+# ---------------------------------------------------------
+if page == "Download":
+    st.title("🎬 Download YouTube Video / Audio")
 
+    url = st.text_input("Enter YouTube Link:")
+    mode = st.radio("Select Mode:", ["Video", "Audio"])
 
-# -----------------------------------------------------------
-# DOWNLOADER PAGE
-# -----------------------------------------------------------
-elif choice == "Downloader":
-    st.title("📥 Ravana Video/Audio Downloader")
+    if mode == "Video":
+        quality = st.selectbox(
+            "Video Quality:",
+            ["240p", "360p", "480p", "720p", "1080p", "1440p", "2160p"]
+        )
+    else:
+        quality = "audio"   # audio has no quality dropdown
 
-    url = st.text_input("Enter YouTube Video or Playlist URL")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        mode = st.selectbox("Download Type", ["video", "audio"])
-    with col2:
-        quality = st.selectbox("Video Quality", ["360p", "480p", "720p", "1080p"])
-
-    # PROGRESS BAR
-    progress = st.progress(0)
-    status_text = st.empty()
-
-    if st.button("Download Now", key="download", help="No watermark, fast download"):
+    if st.button("Start Download"):
         if not url.strip():
-            st.error("❌ Please enter a valid URL")
+            st.error("Please enter a link")
         else:
+            with st.spinner("Downloading… Please wait…"):
+                files = download_video_or_playlist(
+                    url,
+                    quality=quality if mode == "Video" else "720p",
+                    mode="video" if mode == "Video" else "audio"
+                )
 
-            # Animate load
-            status_text.write("⏳ Initializing download...")
-            for i in range(20):
-                progress.progress(i * 5)
-                time.sleep(0.02)
+            st.success("Download Completed!")
 
-            try:
-                status_text.write("🚀 Downloading... Please wait...")
-                files = download_video_or_playlist(url, quality, mode)
-
-                progress.progress(100)
-                st.success("🎉 Download Completed!")
-
-                # Save download history
-                if not os.path.exists("history.json"):
-                    open("history.json", "w").write("[]")
-
-                history = json.load(open("history.json"))
-                history.append({"url": url, "files": files})
-                json.dump(history, open("history.json", "w"), indent=4)
-
-                # Show download buttons
-                st.subheader("⬇ Your Downloads")
-                for file in files:
-                    if os.path.exists(file):
+            for f in files:
+                if os.path.exists(f):
+                    with open(f, "rb") as data:
                         st.download_button(
-                            label=f"Download {os.path.basename(file)}",
-                            data=open(file, "rb"),
-                            file_name=os.path.basename(file)
+                            label=f"Download {os.path.basename(f)}",
+                            data=data,
+                            file_name=os.path.basename(f)
                         )
 
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
+            # SAVE HISTORY
+            st.session_state.history.append({
+                "url": url,
+                "mode": mode,
+                "files": files
+            })
 
 
-    # VIEW DOWNLOAD HISTORY
-    st.subheader("📜 Download History")
-    if os.path.exists("history.json"):
-        history = json.load(open("history.json"))
-        for item in history[-5:][::-1]:
-            st.write(f"🔗 {item['url']}")
+# ---------------------------------------------------------
+# HISTORY PAGE
+# ---------------------------------------------------------
+if page == "History":
+    st.title("📜 Download History")
+
+    if len(st.session_state.history) == 0:
+        st.info("No downloads yet.")
+    else:
+        for item in st.session_state.history:
+            st.write(f"**URL:** {item['url']}")
+            st.write(f"Mode: {item['mode']}")
+            for f in item['files']:
+                st.write(f"📁 {f}")
+            st.markdown("---")
 
 
-# -----------------------------------------------------------
-# CREDITS PAGE
-# -----------------------------------------------------------
-elif choice == "Credits":
-    st.title("👨‍💻 Credits")
+# ---------------------------------------------------------
+# ABOUT PAGE
+# ---------------------------------------------------------
+if page == "About":
+    st.title("👨‍💻 About Developer")
+    st.write("""
+    **Created by:** D. Abhiram  
+    **Studying:** B.Sc Computer Science  
+    **College:** SSSIHL, Nandigama Campus  
 
-    st.markdown("""
-    **Ravana YouTube Downloader**  
-    Built by **Devulapalli Abhiram** ❤️
-
-    - 🚀 Fastest YT Downloader  
-    - 🧠 Streamlit + Python + yt-dlp  
-    - 🎨 Custom UI Design  
+    Ravana Downloader is made to be:
+    - Fast  
+    - Clean  
+    - Professional  
+    - Student-friendly  
     """)
 
-    st.success("Made with ❤️ & Python")
+
 
 
 
