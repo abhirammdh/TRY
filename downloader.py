@@ -1,100 +1,105 @@
-import yt_dlp
 import os
+import yt_dlp
 
-DOWNLOAD_FOLDER = "downloads"
 
-# Ensure folder exists
-os.makedirs(DOWNLOAD_FOLDER, exist_ok=True)
+# Create folder
+def make_folder(folder):
+    if not os.path.exists(folder):
+        os.makedirs(folder)
+    return folder
 
-# SAFE FORMAT MAP (does NOT trigger login restrictions)
-VIDEO_QUALITY = {
-    "144p": "18",   # mp4
-    "240p": "18",
-    "360p": "18",
-    "480p": "135+140",
-    "720p": "22",   # mp4
-    "1080p": "137+140",
-}
 
-def download_video(url, quality="720p"):
-    """Download video without merging restrictions."""
-    
-    format_id = VIDEO_QUALITY.get(quality, "22")
+# ---------------------------------------------------------
+#  EXTRACT VIDEO DETAILS (title, thumbnail, views, etc.)
+# ---------------------------------------------------------
+def get_video_info(url):
+    ydl_opts = {"quiet": True, "skip_download": True}
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+
+    return {
+        "title": info.get("title"),
+        "thumbnail": info.get("thumbnail"),
+        "duration": info.get("duration"),
+        "views": info.get("view_count"),
+        "channel": info.get("channel"),
+        "upload_date": info.get("upload_date"),
+    }
+
+
+# ---------------------------------------------------------
+#  DOWNLOAD BEST VIDEO (MP4)
+# ---------------------------------------------------------
+def download_best_video(url):
+    folder = make_folder("downloads/videos")
 
     ydl_opts = {
-        "format": format_id,
-        "outtmpl": f"{DOWNLOAD_FOLDER}/%(title)s.%(ext)s",
-        "noplaylist": True,
-        "nocheckcertificate": True,
+        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4",
+        "outtmpl": f"{folder}/%(title)s.%(ext)s",
         "quiet": True,
-        "no_warnings": True,
-        "ignoreerrors": True,
+        "merge_output_format": "mp4"
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
-        if info:
-            return os.path.join(DOWNLOAD_FOLDER, ydl.prepare_filename(info))
+        filename = ydl.prepare_filename(info)
 
-    return None
+    return filename
 
 
-def download_audio(url):
-    """Download audio only (mp3)."""
-    
+# ---------------------------------------------------------
+#  DOWNLOAD BEST AUDIO (M4A)
+# ---------------------------------------------------------
+def download_best_audio(url):
+    folder = make_folder("downloads/audios")
+
     ydl_opts = {
-        "format": "bestaudio/best",
-        "outtmpl": f"{DOWNLOAD_FOLDER}/%(title)s.%(ext)s",
-        "noplaylist": True,
-        "quiet": True,
-        "no_warnings": True,
-        "ignoreerrors": True,
-        "postprocessors": [
-            {
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
-            }
-        ],
+        "format": "bestaudio[ext=m4a]/m4a",
+        "outtmpl": f"{folder}/%(title)s.m4a",
+        "quiet": True
     }
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
         info = ydl.extract_info(url, download=True)
-        if info:
-            filename = ydl.prepare_filename(info).replace(".webm", ".mp3").replace(".m4a", ".mp3")
-            return os.path.join(DOWNLOAD_FOLDER, filename)
+        filename = ydl.prepare_filename(info)
 
-    return None
+    return filename
 
 
-def download_video_or_playlist(url, quality="720p", mode="video"):
-    """Main function used by app.py"""
+# ---------------------------------------------------------
+#  UNIVERSAL ENTRY (video / audio)
+# ---------------------------------------------------------
+def download_video_or_playlist(url, mode="video"):
+    is_playlist = ("list=" in url or "playlist" in url)
 
-    # If playlist
-    if "playlist" in url or "list=" in url:
-        results = []
+    # ------------ Playlist ------------
+    if is_playlist:
+        folder = make_folder(f"downloads/playlist_{mode}s")
+
+        if mode == "video":
+            fmt = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4"
+        else:
+            fmt = "bestaudio[ext=m4a]/m4a"
+
         ydl_opts = {
+            "format": fmt,
+            "outtmpl": f"{folder}/%(playlist_index)s - %(title)s.%(ext)s",
             "quiet": True,
-            "ignoreerrors": True,
-            "extract_flat": "in_playlist",
+            "merge_output_format": "mp4",
         }
 
+        out_files = []
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            playlist = ydl.extract_info(url, download=False)
-
-        if playlist and "entries" in playlist:
+            playlist = ydl.extract_info(url, download=True)
             for entry in playlist["entries"]:
-                if not entry:
-                    continue
-                video_url = f"https://www.youtube.com/watch?v={entry['id']}"
-                if mode == "video":
-                    results.append(download_video(video_url, quality))
-                else:
-                    results.append(download_audio(video_url))
-        return results
+                if entry:
+                    out_files.append(ydl.prepare_filename(entry))
 
-    # Single Video
+        return out_files
+
+    # ------------ Single Video ------------
     if mode == "video":
-        return [download_video(url, quality)]
+        return [download_best_video(url)]
     else:
-        return [download_audio(url)]
+        return [download_best_audio(url)]
