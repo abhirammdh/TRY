@@ -5,7 +5,7 @@ import io
 import zipfile
 from downloader import download_video_or_playlist
 
-# ------------------- THEME CSS (ENHANCED FOR PROFESSIONAL BUTTONS & ANIMATIONS) -------------------
+# ------------------- THEME CSS (REFINED: NO GLOW, CLEAN ALIGNMENT) -------------------
 def load_theme(dark=True):
     if dark:
         st.markdown("""
@@ -32,21 +32,16 @@ def load_theme(dark=True):
             box-shadow: 0 12px 40px rgba(0,255,200,0.15);
         }
         
-        /* Title with Glow Animation */
+        /* Title: Clean, No Glow */
         .title {
             font-size: 36px;
             font-weight: 800;
             color: #00ffcc;
-            text-shadow: 0 0 20px #00ffcc, 0 0 40px #00ffcc;
-            animation: glow 2s ease-in-out infinite alternate;
             margin-bottom: 20px;
-        }
-        @keyframes glow {
-            from { text-shadow: 0 0 20px #00ffcc, 0 0 40px #00ffcc; }
-            to { text-shadow: 0 0 10px #00ffcc, 0 0 30px #00ffcc, 0 0 50px #00ffcc; }
+            text-align: center;
         }
         
-        /* Professional Button Styles */
+        /* Professional Button Styles: No Pulse/Glow */
         .stButton > button {
             background: linear-gradient(135deg, #00ffcc 0%, #0099aa 100%);
             color: #000;
@@ -59,6 +54,8 @@ def load_theme(dark=True):
             box-shadow: 0 4px 15px rgba(0,255,200,0.2);
             position: relative;
             overflow: hidden;
+            width: 100%;
+            text-align: center;
         }
         .stButton > button:hover {
             transform: translateY(-3px) scale(1.02);
@@ -68,16 +65,6 @@ def load_theme(dark=True):
         .stButton > button:active {
             transform: translateY(-1px) scale(1);
             box-shadow: 0 4px 15px rgba(0,255,200,0.2);
-        }
-        
-        /* Pulse Animation for Download Button */
-        .download-btn {
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(0,255,200,0.4); }
-            70% { box-shadow: 0 0 0 10px rgba(0,255,200,0); }
-            100% { box-shadow: 0 0 0 0 rgba(0,255,200,0); }
         }
         
         /* Fade-in Animation for Elements */
@@ -103,6 +90,7 @@ def load_theme(dark=True):
             color: #00ffcc;
             padding: 10px;
             transition: border 0.3s ease;
+            width: 100%;
         }
         .stTextInput > div > div > input:focus {
             border-color: #00ffcc;
@@ -115,11 +103,17 @@ def load_theme(dark=True):
             border: 1px solid rgba(0,255,200,0.2);
             border-radius: 8px;
             color: #00ffcc;
+            width: 100%;
         }
         
         /* Thumbnail and Info Fade-in */
         .preview-section {
             animation: fadeIn 1s ease-out;
+        }
+        
+        /* Improved Alignment for Columns */
+        .stColumns > div {
+            padding: 0 5px;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -148,21 +142,16 @@ def load_theme(dark=True):
             box-shadow: 0 12px 40px rgba(106,0,255,0.15);
         }
         
-        /* Title with Glow Animation */
+        /* Title: Clean, No Glow */
         .title {
             font-size: 36px;
             font-weight: 800;
             color: #6a00ff;
-            text-shadow: 0 0 20px #b57aff, 0 0 40px #b57aff;
-            animation: glow 2s ease-in-out infinite alternate;
             margin-bottom: 20px;
-        }
-        @keyframes glow {
-            from { text-shadow: 0 0 20px #b57aff, 0 0 40px #b57aff; }
-            to { text-shadow: 0 0 10px #b57aff, 0 0 30px #b57aff, 0 0 50px #b57aff; }
+            text-align: center;
         }
         
-        /* Professional Button Styles */
+        /* Professional Button Styles: No Pulse/Glow */
         .stButton > button {
             background: linear-gradient(135deg, #6a00ff 0%, #9d4edd 100%);
             color: #fff;
@@ -175,6 +164,8 @@ def load_theme(dark=True):
             box-shadow: 0 4px 15px rgba(106,0,255,0.2);
             position: relative;
             overflow: hidden;
+            width: 100%;
+            text-align: center;
         }
         .stButton > button:hover {
             transform: translateY(-3px) scale(1.02);
@@ -184,16 +175,6 @@ def load_theme(dark=True):
         .stButton > button:active {
             transform: translateY(-1px) scale(1);
             box-shadow: 0 4px 15px rgba(106,0,255,0.2);
-        }
-        
-        /* Pulse Animation for Download Button */
-        .download-btn {
-            animation: pulse 2s infinite;
-        }
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(106,0,255,0.4); }
-            70% { box-shadow: 0 0 0 10px rgba(106,0,255,0); }
-            100% { box-shadow: 0 0 0 0 rgba(106,0,255,0); }
         }
         
         /* Fade-in Animation for Elements */
@@ -219,6 +200,7 @@ def load_theme(dark=True):
             color: #6a00ff;
             padding: 10px;
             transition: border 0.3s ease;
+            width: 100%;
         }
         .stTextInput > div > div > input:focus {
             border-color: #6a00ff;
@@ -231,11 +213,17 @@ def load_theme(dark=True):
             border: 1px solid rgba(106,0,255,0.2);
             border-radius: 8px;
             color: #6a00ff;
+            width: 100%;
         }
         
         /* Thumbnail and Info Fade-in */
         .preview-section {
             animation: fadeIn 1s ease-out;
+        }
+        
+        /* Improved Alignment for Columns */
+        .stColumns > div {
+            padding: 0 5px;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -278,7 +266,7 @@ with st.container():
     with col1:
         url = st.text_input("Enter YouTube URL", placeholder="Paste your YouTube link here...")
     with col2:
-        if st.button("🔍 Preview", key="preview_btn"):
+        if st.button("Preview", key="preview_btn"):
             time.sleep(0.5)  # Simulate loading for animation feel
             st.rerun()
     
@@ -328,11 +316,12 @@ if url:
         st.markdown('</div>', unsafe_allow_html=True)
 
 # ------------------- DOWNLOAD -------------------
-if st.button("🚀 Download Now", help="Click to start downloading!", key="download_btn"):
+if st.button("Download Now", help="Click to start downloading!", key="download_btn"):
     if not url:
         st.warning("Enter a URL first!")
     else:
         with st.spinner("Downloading... Please wait while we fetch your content."):
+            zip_name = "playlist"  # Default value to avoid NameError
             if mode == "Video":
                 download_type = "video"
                 qual = video_quality
@@ -354,9 +343,9 @@ if st.button("🚀 Download Now", help="Click to start downloading!", key="downl
             )
             
             if result is None:
-                st.error("❌ Download failed! Check URL or try again.")
+                st.error("Download failed! Check URL or try again.")
             else:
-                st.success("✅ Download ready!")
+                st.success("Download ready!")
                 # Show titles with fade-in
                 st.markdown('<div class="fade-in">', unsafe_allow_html=True)
                 st.subheader("Downloaded Items:")
@@ -369,7 +358,7 @@ if st.button("🚀 Download Now", help="Click to start downloading!", key="downl
                     # ZIP download
                     st.markdown('<div class="download-btn">', unsafe_allow_html=True)
                     st.download_button(
-                        "📦 Download Playlist ZIP",
+                        "Download Playlist ZIP",
                         data=result,
                         file_name=zip_name + ".zip",
                         mime="application/zip",
@@ -383,13 +372,13 @@ if st.button("🚀 Download Now", help="Click to start downloading!", key="downl
                             with open(file_path, "rb") as f:
                                 fname = os.path.basename(file_path)
                                 st.markdown('<div class="download-btn">', unsafe_allow_html=True)
-                                st.download_button(f"⬇️ {fname}", f, file_name=fname, use_container_width=True)
+                                st.download_button(f"{fname}", f, file_name=fname, use_container_width=True)
                                 st.markdown('</div>', unsafe_allow_html=True)
                     else:
                         # Single file
                         with open(result, "rb") as f:
                             st.markdown('<div class="download-btn">', unsafe_allow_html=True)
-                            label = "📹 Download Video" if mode == "Video" else "🎵 Download Audio"
+                            label = "Download Video" if mode == "Video" else "Download Audio"
                             st.download_button(label, f, file_name=os.path.basename(result), use_container_width=True)
                             st.markdown('</div>', unsafe_allow_html=True)
 
