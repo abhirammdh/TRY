@@ -1,79 +1,105 @@
+import yt_dlp
 import os
-import io
-import zipfile
 import shutil
 
-VIDEO_OPTIONS = {
-    "144p": "best[height<=144][ext=mp4]/best[height<=144]",
-    "240p": "best[height<=240][ext=mp4]/best[height<=240]",
-    "360p": "best[height<=360][ext=mp4]/best[height<=360]",
-    "480p": "best[height<=480][ext=mp4]/best[height<=480]",
-    "720p": "best[height<=720][ext=mp4]/best[height<=720]",
-    "1080p": "best[height<=1080][ext=mp4]/best[height<=1080]",
-    "1440p (2K)": "best[height<=1440][ext=mp4]/best[height<=1440]",
-    "2160p (4K)": "best[height<=2160][ext=mp4]/best[height<=2160]",
-    "Best": "best[ext=mp4]/best",
-}
+# ---------------------------------------------
+# Clean folder before downloads
+# ---------------------------------------------
+def clean_folder(folder):
+    if os.path.exists(folder):
+        shutil.rmtree(folder)
+    os.makedirs(folder)
 
-def download_video_or_playlist(url, download_path='downloads', download_type='video', quality='Best', content_type='Video', zip_output=False, zip_filename="videos.zip", progress_hook=None):
-    import yt_dlp
-    if os.path.exists(download_path):
-        shutil.rmtree(download_path)
-    os.makedirs(download_path, exist_ok=True)
-    
-    ydl_format = VIDEO_OPTIONS.get(quality, "best[ext=mp4]/best")
-    is_playlist = (content_type == "Playlist")
-    
-    # First, extract info to get titles and thumbnails (no download yet)
-    info_opts = {
-        "quiet": True,
-        "extract_flat": False,
-        "noplaylist": not is_playlist,
-        "ignoreerrors": True,
+
+# ---------------------------------------------
+# DOWNLOAD SINGLE VIDEO (VIDEO ONLY)
+# ---------------------------------------------
+def download_video(url, quality, output_folder="output"):
+    clean_folder(output_folder)
+
+    # Map UI quality → yt-dlp format
+    video_format_map = {
+        "144p": "bestvideo[height=144]",
+        "240p": "bestvideo[height=240]",
+        "360p": "bestvideo[height=360]",
+        "480p": "bestvideo[height=480]",
+        "720p": "bestvideo[height=720]",
+        "1080p": "bestvideo[height=1080]",
+        "1440p (2K)": "bestvideo[height=1440]",
+        "2160p (4K)": "bestvideo[height=2160]"
     }
-    with yt_dlp.YoutubeDL(info_opts) as ydl_info:
-        info = ydl_info.extract_info(url, download=False)
-    
-    titles = []
-    thumbnails = []
-    if is_playlist and "entries" in info:
+
+    fmt = video_format_map.get(quality, "bestvideo")
+
+    ydl_opts = {
+        "format": fmt,       # VIDEO ONLY
+        "outtmpl": f"{output_folder}/%(title)s.%(ext)s",
+        "merge_output_format": None,  # no merging at all
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        filename = ydl.prepare_filename(info)
+        return filename
+
+
+
+# ---------------------------------------------
+# DOWNLOAD AUDIO ONLY
+# ---------------------------------------------
+def download_audio(url, quality, output_folder="output"):
+    clean_folder(output_folder)
+
+    # Map UI → yt-dlp audio bitrates
+    audio_quality_map = {
+        "60kbps": "60",
+        "128kbps": "128",
+        "192kbps": "192",
+        "256kbps": "256",
+        "320kbps": "320",
+        "360kbps": "360"
+    }
+
+    abr = audio_quality_map.get(quality, "128")
+
+    ydl_opts = {
+        "format": "bestaudio",        # AUDIO ONLY
+        "outtmpl": f"{output_folder}/%(title)s.%(ext)s",
+        "postprocessors": [
+            {
+                "key": "FFmpegAudioConvertor",
+                "preferredcodec": "mp3",
+                "preferredquality": abr
+            }
+        ]
+    }
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=True)
+        filename = ydl.prepare_filename(info)
+        return filename.replace(".webm", ".mp3").replace(".m4a", ".mp3")
+
+
+
+# ---------------------------------------------
+# PLAYLIST DOWNLOAD (EACH ITEM SEPARATELY)
+# ---------------------------------------------
+def get_playlist_items(url):
+    """Return playlist items (title + URL) without downloading."""
+    ydl_opts = {"quiet": True, "extract_flat": True}
+
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        info = ydl.extract_info(url, download=False)
+        if "entries" not in info:
+            return []
+
+        items = []
         for entry in info["entries"]:
             if entry:
-                titles.append(entry.get("title", "Unknown"))
-                thumbnails.append(entry.get("thumbnail", None))
-    else:
-        titles = [info.get("title", "Unknown")]
-        thumbnails = [info.get("thumbnail", None)]
-    
-    # Now download with progress
-    ydl_opts = {
-        "format": ydl_format,
-        "ignoreerrors": True,
-        "quiet": True,
-        "outtmpl": os.path.join(download_path, "%(title)s.%(ext)s"),
-        "noplaylist": not is_playlist,
-        "progress_hooks": [progress_hook] if progress_hook else [],
-        "no_warnings": True,
-        "merge_output_format": None,
-    }
-    
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-    except Exception as e:
-        print(f"Error: {e}")
-        return None, titles, thumbnails
-    
-    files = [os.path.join(root, f) for root, _, fs in os.walk(download_path) for f in fs]
-    if not files:
-        return None, titles, thumbnails
-    
-    if zip_output and is_playlist and len(files) > 1:
-        buffer = io.BytesIO()
-        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as z:
-            for f in files:
-                z.write(f, os.path.basename(f))
-        buffer.seek(0)
-        return buffer.getvalue(), titles, thumbnails
-    
-    return files[0] if not is_playlist else files, titles, thumbnails
+                items.append({
+                    "title": entry.get("title"),
+                    "url": f"https://www.youtube.com/watch?v={entry.get('id')}"
+                })
+
+        return items
+
