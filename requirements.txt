@@ -1,2 +1,2 @@
 streamlit
-yt-dlp>=2024.10.22
+yt-dlp
