@@ -119,6 +119,11 @@ def load_theme(dark=True):
             border-radius: 10px;
             border-left: 4px solid #ef4444;
         }
+
+        /* Progress Bar: Custom */
+        .stProgress > div > div > div {
+            background: linear-gradient(90deg, #4f46e5, #7c3aed);
+        }
         </style>
         """, unsafe_allow_html=True)
     else:
@@ -233,6 +238,11 @@ def load_theme(dark=True):
             border-radius: 10px;
             border-left: 4px solid #ef4444;
         }
+
+        /* Progress Bar: Custom */
+        .stProgress > div > div > div {
+            background: linear-gradient(90deg, #4f46e5, #7c3aed);
+        }
         </style>
         """, unsafe_allow_html=True)
 
@@ -329,6 +339,19 @@ if st.button("Start Download", key="download_btn"):
     if not url:
         st.error("Please enter a YouTube URL first.")
     else:
+        # FFmpeg Warning Handling
+        try:
+            import subprocess
+            subprocess.run(["ffmpeg", "-version"], capture_output=True, check=True)
+            ffmpeg_installed = True
+        except:
+            ffmpeg_installed = False
+            if mode == "Video":
+                st.warning("⚠️ FFmpeg not detected. Video may download as separate audio/video files without merging. Install FFmpeg for best quality.")
+        
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
         with st.spinner("Processing your request..."):
             zip_name = "playlist"
             if mode == "Playlist":
@@ -337,14 +360,33 @@ if st.button("Start Download", key="download_btn"):
             download_type = "video" if mode in ["Video", "Playlist"] else "audio"
             quality = video_quality if mode != "Audio" else audio_quality
             
+            # Progress callback
+            def progress_hook(d):
+                if d['status'] == 'downloading':
+                    percent = d.get('_percent_str', '0%')
+                    speed = d.get('_speed_str', 'N/A')
+                    status_text.text(f"Downloading: {percent} | Speed: {speed}")
+                    if d.get('_percent_str'):
+                        try:
+                            p = float(d['_percent_str'].replace('%', '')) / 100
+                            progress_bar.progress(p)
+                        except:
+                            pass
+                elif d['status'] == 'finished':
+                    status_text.text("Post-processing...")
+            
             result, titles = download_video_or_playlist(
                 url=url,
                 download_type=download_type,
                 quality=quality,
                 content_type=mode,
                 zip_output=(mode == "Playlist"),
-                zip_filename=f"{zip_name}.zip"
+                zip_filename=f"{zip_name}.zip",
+                progress_hook=progress_hook  # Pass the hook
             )
+            
+            progress_bar.progress(1.0)
+            status_text.text("Complete!")
             
             if result is None:
                 st.error("Download failed. Please check the URL and try again.")
