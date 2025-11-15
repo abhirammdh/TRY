@@ -1,136 +1,197 @@
 import streamlit as st
-from downloader import (
-    download_video,
-    download_audio,
-    get_playlist_items
+import os
+import json
+import time
+from downloader import download_video_or_playlist
+
+# -----------------------------------------------------------
+# CONFIG
+# -----------------------------------------------------------
+st.set_page_config(
+    page_title="Ravana Downloader",
+    layout="centered",
+    page_icon="🔥"
 )
-import requests
-from io import BytesIO
-import zipfile
 
 
-# Page Setup
-st.set_page_config(page_title="Ravana YT Downloader", layout="wide")
+# -----------------------------------------------------------
+# THEME TOGGLE (Light / Dark)
+# -----------------------------------------------------------
+if "theme" not in st.session_state:
+    st.session_state.theme = "dark"
 
-# Theme Toggle
-if 'theme' not in st.session_state:
-    st.session_state.theme = "light"
+def toggle_theme():
+    st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
 
-if st.session_state.theme == "dark":
-    bg = "#000000"
-    text = "#00ff66"
-else:
-    bg = "#ffffff"
-    text = "#6c33ff"
+theme_button = "🌙 Dark Mode" if st.session_state.theme == "light" else "☀️ Light Mode"
+st.button(theme_button, on_click=toggle_theme)
 
-# Custom CSS (clean modern UI)
-st.markdown(f"""
+# Custom CSS (no glow, smooth animations)
+st.markdown(
+    f"""
     <style>
         body {{
-            background-color: {bg};
-            color: {text};
+            background-color: {"#0d0d0d" if st.session_state.theme=="dark" else "#ffffff"};
+            color: {"white" if st.session_state.theme=="dark" else "black"};    
         }}
-        .stButton>button {{
-            background: {text};
-            color: white;
+
+        .download-btn {{
             padding: 10px 20px;
-            border-radius: 8px;
+            border-radius: 12px;
+            background: #ff4d4d;
+            color: white;
             border: none;
+            font-size: 18px;
+            transition: 0.2s ease-in-out;
+        }}
+
+        .download-btn:hover {{
+            transform: scale(1.05);
+            background: #e60000;
+        }}
+
+        .nav {{
+            text-align: center;
+            margin-bottom: 20px;
+        }}
+
+        .nav button {{
+            padding: 10px 18px;
+            border-radius: 10px;
+            margin: 0 10px;
+            background: #333;
+            color: white;
+            border: none;
+            transition: 0.2s;
+        }}
+
+        .nav button:hover {{
+            background: #555;
         }}
     </style>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
+
+# -----------------------------------------------------------
+# Navigation (Home / Downloader / Credits)
+# -----------------------------------------------------------
+pages = ["Home", "Downloader", "Credits"]
+choice = st.radio("Navigation", pages, horizontal=True)
 
 
-# Sidebar
-st.sidebar.title("Navigation")
-page = st.sidebar.radio("", ["Home", "Download", "About"])
+# -----------------------------------------------------------
+# HOME PAGE
+# -----------------------------------------------------------
+if choice == "Home":
+    st.title("🔥 Ravana YouTube Downloader")
+    st.subheader("Fast • Clean • Secure")
 
-if st.sidebar.button("Toggle Theme"):
-    st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
-
-
-# ---------------- HOME ----------------
-if page == "Home":
-    st.title("🔥 Ravana YT Downloader")
-    st.write("""
-    Welcome to **Ravana YT Downloader**
-
-    ### ⭐ Features
-    - Download **Video (240p → 4K)**  
-    - Download **Audio (60kbps → 360kbps)**  
-    - Playlist item-wise download  
-    - Thumbnail preview  
-    - ZIP download  
-    - Dark/Light themes  
+    st.markdown("""
+    🚀 **Features:**
+    - ✨ Video Downloader  
+    - 🎵 Audio Downloader  
+    - 🎞 Playlist Download  
+    - 📥 Progress Bar  
+    - 🕒 Download History  
+    - 🌗 Dark Mode  
+    - ⚡ Smooth UI Animations  
+    - 🧩 No watermark  
     """)
 
+    st.image(
+        "https://i.ibb.co/6rJ6fCy/yt-banner.jpg",
+        caption="Ravana Downloader",
+        use_container_width=True
+    )
 
-# ---------------- ABOUT ----------------
-if page == "About":
-    st.title("About Developer")
-    st.write("""
-    **Created by:** D. Abhiram  
-    B.Sc Computer Science, **SSSIHL Nandigama Campus**
-
-    A clean, fast and modern downloader built for students & creators ❤️
-    """)
+    st.info("Go to the **Downloader** tab to start downloading 🔥")
 
 
-# ---------------- DOWNLOAD ----------------
-if page == "Download":
-    st.title("Download YouTube Video / Audio")
+# -----------------------------------------------------------
+# DOWNLOADER PAGE
+# -----------------------------------------------------------
+elif choice == "Downloader":
+    st.title("📥 Ravana Video/Audio Downloader")
 
-    url = st.text_input("Enter YouTube URL")
+    url = st.text_input("Enter YouTube Video or Playlist URL")
 
-    if url:
-        # Thumbnail
-        try:
-            if "v=" in url:
-                vid = url.split("v=")[1][:11]
-                st.image(f"https://img.youtube.com/vi/{vid}/maxresdefault.jpg", width=500)
-        except:
-            st.warning("Thumbnail not available.")
+    col1, col2 = st.columns(2)
+    with col1:
+        mode = st.selectbox("Download Type", ["video", "audio"])
+    with col2:
+        quality = st.selectbox("Video Quality", ["360p", "480p", "720p", "1080p"])
 
-        mode = st.radio("Select Mode", ["Video", "Audio", "Playlist"])
+    # PROGRESS BAR
+    progress = st.progress(0)
+    status_text = st.empty()
 
-        # VIDEO MODE
-        if mode == "Video":
-            q = st.selectbox("Select Video Quality", [
-                "240p","360p","480p","720p","1080p","1440p (2K)","2160p (4K)"
-            ])
-            if st.button("Download Video"):
-                file = download_video(url, q)
-                if file:
-                    with open(file, "rb") as f:
-                        st.download_button("Download File", f, file_name=file)
-                else:
-                    st.error("Download failed.")
-
-        # AUDIO MODE
-        elif mode == "Audio":
-            q = st.selectbox("Select Audio Quality", [
-                "60kbps","128kbps","192kbps","256kbps","320kbps","360kbps"
-            ])
-            if st.button("Download Audio"):
-                file = download_audio(url, q)
-                if file:
-                    with open(file, "rb") as f:
-                        st.download_button("Download File", f, file_name=file)
-                else:
-                    st.error("Download failed.")
-
-        # PLAYLIST MODE
+    if st.button("Download Now", key="download", help="No watermark, fast download"):
+        if not url.strip():
+            st.error("❌ Please enter a valid URL")
         else:
-            st.subheader("Playlist Videos")
-            items = get_playlist_items(url)
 
-            for i, video in enumerate(items):
-                st.write(f"**{i+1}. {video['title']}**")
-                col1, col2 = st.columns([4,1])
-                with col2:
-                    if st.button("Download", key=f"d{i}"):
-                        f = download_video(video["url"], "720p")
-                        with open(f, "rb") as fp:
-                            st.download_button("Save", fp, file_name=f"{video['title']}.mp4", key=f"s{i}")
+            # Animate load
+            status_text.write("⏳ Initializing download...")
+            for i in range(20):
+                progress.progress(i * 5)
+                time.sleep(0.02)
+
+            try:
+                status_text.write("🚀 Downloading... Please wait...")
+                files = download_video_or_playlist(url, quality, mode)
+
+                progress.progress(100)
+                st.success("🎉 Download Completed!")
+
+                # Save download history
+                if not os.path.exists("history.json"):
+                    open("history.json", "w").write("[]")
+
+                history = json.load(open("history.json"))
+                history.append({"url": url, "files": files})
+                json.dump(history, open("history.json", "w"), indent=4)
+
+                # Show download buttons
+                st.subheader("⬇ Your Downloads")
+                for file in files:
+                    if os.path.exists(file):
+                        st.download_button(
+                            label=f"Download {os.path.basename(file)}",
+                            data=open(file, "rb"),
+                            file_name=os.path.basename(file)
+                        )
+
+            except Exception as e:
+                st.error(f"❌ Error: {e}")
+
+
+    # VIEW DOWNLOAD HISTORY
+    st.subheader("📜 Download History")
+    if os.path.exists("history.json"):
+        history = json.load(open("history.json"))
+        for item in history[-5:][::-1]:
+            st.write(f"🔗 {item['url']}")
+
+
+# -----------------------------------------------------------
+# CREDITS PAGE
+# -----------------------------------------------------------
+elif choice == "Credits":
+    st.title("👨‍💻 Credits")
+
+    st.markdown("""
+    **Ravana YouTube Downloader**  
+    Built by **Devulapalli Abhiram** ❤️
+
+    - 🚀 Fastest YT Downloader  
+    - 🧠 Streamlit + Python + yt-dlp  
+    - 🎨 Custom UI Design  
+    """)
+
+    st.success("Made with ❤️ & Python")
+
+
+
 
 
