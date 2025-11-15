@@ -1,115 +1,132 @@
 import streamlit as st
-import os
-from downloader import download_youtube   # <-- NEW IMPORT
+from downloader import download_video_or_playlist
 
-# -------------------- PAGE CONFIG --------------------
+# ---------------------------
+# PAGE CONFIG
+# ---------------------------
 st.set_page_config(
-    page_title="Ravana YT Downloader",
-    layout="centered",
+    page_title="RAVANA YT DOWNLOADER",
+    page_icon=None,
+    layout="centered"
 )
 
-# -------------------- CUSTOM CSS ---------------------
+# ---------------------------
+# CUSTOM STYLES
+# ---------------------------
 st.markdown("""
 <style>
 
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600&display=swap');
-
-* { font-family: 'Poppins', sans-serif !important; }
-
-body {
-    background: linear-gradient(135deg, #0f0f0f, #1c1c1c);
+body, .main {
+    background: linear-gradient(135deg, #0f0f0f, #1a1a1a);
     color: white;
 }
 
-.css-ffhzg2, .css-1v0mbdj {
-    background: rgba(255,255,255,0.05) !important;
-    backdrop-filter: blur(12px) !important;
-    border-radius: 18px !important;
-    padding: 20px !important;
-    border: 1px solid rgba(255,255,255,0.08) !important;
-}
-
-button {
-    border-radius: 10px !important;
-    transition: 0.3s ease-in-out;
-}
-button:hover {
-    transform: scale(1.03);
-}
-
-h1 {
-    color: #e03131 !important;
+.big-title {
+    font-size: 40px;
+    font-weight: 800;
     text-align: center;
-    font-weight: 700 !important;
+    color: #ff265a;
+    margin-top: -20px;
+    margin-bottom: 10px;
+}
+
+.sub-text {
+    text-align: center;
+    font-size: 15px;
+    color: #bbbbbb;
+    margin-top: -10px;
 }
 
 .glass-card {
-    background: rgba(255,255,255,0.06);
-    border-radius: 20px;
-    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255, 255, 255, 0.08);
     padding: 25px;
+    border-radius: 18px;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+    margin-top: 25px;
+}
+
+.stButton > button {
+    width: 100%;
+    background: #ff265a;
+    color: white;
+    font-weight: 700;
+    border-radius: 10px;
+    padding: 10px;
+    transition: 0.2s;
+}
+
+.stButton > button:hover {
+    background: #ff003c;
+    transform: scale(1.02);
 }
 
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------- TITLE --------------------
-st.markdown("<h1>RAVANA YT DOWNLOADER</h1>", unsafe_allow_html=True)
-st.write("##### Professional YouTube Video & Playlist Downloader")
+# ---------------------------
+# UI HEADER
+# ---------------------------
+st.markdown("<div class='big-title'>RAVANA YT DOWNLOADER</div>", unsafe_allow_html=True)
+st.markdown("<div class='sub-text'>Download YouTube Videos · Playlists · Audio · ZIP</div>", unsafe_allow_html=True)
 
+# ---------------------------
+# MAIN CARD
+# ---------------------------
 st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
 
-# -------------------- NAVIGATION --------------------
-menu = st.radio(
-    "Choose Mode",
-    ["Single Video", "Playlist"],
-    horizontal=True
-)
+# INPUTS
+url = st.text_input("YouTube URL")
 
-# -------------------- PROGRESS HANDLER --------------------
-progress_bar = st.progress(0)
-status_text = st.empty()
+col1, col2 = st.columns(2)
+with col1:
+    download_type = st.radio("Download Type", ["video", "audio"])
+with col2:
+    content_type = st.radio("Content Type", ["Video", "Playlist"])
 
-def progress_hook(d):
-    if d['status'] == 'downloading':
-        if "total_bytes" in d:
-            percent = d['downloaded_bytes'] / d['total_bytes']
-            progress_bar.progress(percent)
-            status_text.text(f"Downloading: {int(percent*100)}%")
-    elif d['status'] == 'finished':
-        status_text.text("Processing video...")
+quality = st.selectbox("Select Quality", ["Best", "Worst", "480p", "720p", "1080p"])
+zip_output = st.checkbox("ZIP Output (For Playlist)")
 
-# -------------------- SINGLE VIDEO --------------------
-if menu == "Single Video":
-    st.subheader("Download Single Video")
-
-    url = st.text_input("Enter YouTube Video URL")
-    folder = st.text_input("Folder Name", "downloads/video")
-
-    if st.button("Download Video"):
-        if url:
-            st.info("Starting download...")
-            success, msg = download_youtube(url, folder, progress_hook)
-            if success:
-                st.success(msg)
-            else:
-                st.error(msg)
-
-# -------------------- PLAYLIST --------------------
-elif menu == "Playlist":
-    st.subheader("Download Playlist")
-
-    url = st.text_input("Enter Playlist URL")
-    folder = st.text_input("Folder Name", "downloads/playlist")
-
-    if st.button("Download Playlist"):
-        if url:
-            st.info("Starting playlist download...")
-            success, msg = download_youtube(url, folder, progress_hook)
-            if success:
-                st.success(msg)
-            else:
-                st.error(msg)
+submit = st.button("Start Download")
 
 st.markdown("</div>", unsafe_allow_html=True)
+
+# ---------------------------
+# PROCESS DOWNLOADING
+# ---------------------------
+if submit:
+    if not url.strip():
+        st.error("❌ Please enter a valid YouTube URL.")
+    else:
+        try:
+            st.info("⏳ Downloading... Please wait...")
+            result = download_video_or_playlist(
+                url=url,
+                download_type=download_type,
+                quality=quality,
+                content_type=content_type,
+                zip_output=zip_output
+            )
+
+            st.success("✅ Download completed!")
+
+            if zip_output:
+                st.download_button(
+                    "Download ZIP File",
+                    result,
+                    file_name="ravana_download.zip"
+                )
+            else:
+                st.write("### Your Files:")
+                for file_path in result:
+                    filename = file_path.split("/")[-1]
+                    with open(file_path, "rb") as f:
+                        st.download_button(
+                            f"Download {filename}",
+                            f,
+                            file_name=filename
+                        )
+
+        except Exception as e:
+            st.error(f"❌ Error: {e}")
