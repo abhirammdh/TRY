@@ -1,166 +1,194 @@
+# app.py — Final (uses downloader.download_video_or_playlist)
 import streamlit as st
 import os
+import json
+import time
+from threading import Thread
 from downloader import download_video_or_playlist
 
+# ---------------- config ----------------
+st.set_page_config(page_title="Ravana Downloader", layout="wide")
+DOWNLOAD_DIR = "downloads"
+HISTORY_FILE = os.path.join(DOWNLOAD_DIR, "history.json")
+os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
-st.set_page_config(page_title="Ravana YT Downloader", layout="wide")
-
-# ---------------------------------------------------------
-# THEME SWITCHER
-# ---------------------------------------------------------
-if "theme" not in st.session_state:
-    st.session_state.theme = "light"
-
-def toggle_theme():
-    st.session_state.theme = "dark" if st.session_state.theme == "light" else "light"
-
-# COLORS
-if st.session_state.theme == "dark":
-    BG = "#000000"
-    TEXT = "#00ff66"
-else:
-    BG = "#ffffff"
-    TEXT = "#6a0dad"
-
-st.markdown(f"""
-<style>
-body {{
-    background-color: {BG};
-    color: {TEXT};
-}}
-.stButton>button {{
-    background-color: transparent;
-    color: {TEXT};
-    border: 2px solid {TEXT};
-    padding: 10px 20px;
-    border-radius: 10px;
-    transition: 0.3s;
-}}
-.stButton>button:hover {{
-    transform: scale(1.05);
-}}
-</style>
-""", unsafe_allow_html=True)
-
-# ---------------------------------------------------------
-# SIDEBAR
-# ---------------------------------------------------------
-st.sidebar.title("⚙ Settings")
-if st.sidebar.button("Toggle Theme"):
-    toggle_theme()
-
-page = st.sidebar.radio("Navigate", ["Home", "Download", "History", "About"])
-
-
-# ---------------------------------------------------------
-# GLOBAL HISTORY
-# ---------------------------------------------------------
+# ---------------- session / history ----------------
 if "history" not in st.session_state:
     st.session_state.history = []
+    if os.path.exists(HISTORY_FILE):
+        try:
+            with open(HISTORY_FILE, "r", encoding="utf-8") as hf:
+                st.session_state.history = json.load(hf)
+        except Exception:
+            st.session_state.history = []
 
+def save_history():
+    try:
+        with open(HISTORY_FILE, "w", encoding="utf-8") as hf:
+            json.dump(st.session_state.history, hf, ensure_ascii=False, indent=2)
+    except Exception:
+        pass
 
-# ---------------------------------------------------------
-# HOME PAGE
-# ---------------------------------------------------------
+def add_history_entry(title, mode, quality, files):
+    entry = {
+        "time": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()),
+        "title": title,
+        "mode": mode,
+        "quality": quality,
+        "files": files
+    }
+    st.session_state.history.insert(0, entry)
+    # keep only recent 300
+    st.session_state.history = st.session_state.history[:300]
+    save_history()
+
+# ---------------- theme ----------------
+if "theme" not in st.session_state:
+    st.session_state.theme = "dark"
+
+def toggle_theme():
+    st.session_state.theme = "light" if st.session_state.theme == "dark" else "dark"
+
+# minimal CSS for dark/light
+if st.session_state.theme == "dark":
+    BG = "#0b0d0f"
+    TEXT = "#e6fff0"
+else:
+    BG = "#ffffff"
+    TEXT = "#111111"
+
+st.markdown(
+    f"""
+    <style>
+      body {{ background: {BG}; color: {TEXT}; }}
+      .stButton>button{{ border-radius:8px; padding:8px 12px; }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ---------------- navigation ----------------
+st.sidebar.title("RAVANA")
+if st.sidebar.button("Toggle theme"):
+    toggle_theme()
+
+page = st.sidebar.radio("Menu", ["Home", "Download", "History", "About"])
+
+# ---------------- Home ----------------
 if page == "Home":
     st.title("🔥 Ravana YT Downloader")
-    st.write("""
-    Welcome to **Ravana YouTube Downloader**, the most powerful downloader built with:
+    st.write("Fast, reliable downloader using your `downloader.py`.")
+    st.write("- No cookies required")
+    st.write("- Video/audio/playlist support")
+    st.write("- Progress bar & history")
+    st.stop()
 
-    ✔ Fast video/audio downloads  
-    ✔ Up to **4K MP4**  
-    ✔ Pure **M4A audio**  
-    ✔ Download playlist fully  
-    ✔ Beautiful dark/light themes  
-    ✔ Full progress bar  
-    ✔ No cookies required  
-    """)
-
-
-# ---------------------------------------------------------
-# DOWNLOAD PAGE
-# ---------------------------------------------------------
+# ---------------- Download ----------------
 if page == "Download":
-    st.title("🎬 Download YouTube Video / Audio")
+    st.title("📥 Download")
 
-    url = st.text_input("Enter YouTube Link:")
-    mode = st.radio("Select Mode:", ["Video", "Audio"])
+    url = st.text_input("YouTube URL (video or playlist)")
+    mode = st.radio("Mode", ["video", "audio"], index=0, horizontal=True)
 
-    if mode == "Video":
-        quality = st.selectbox(
-            "Video Quality:",
-            ["240p", "360p", "480p", "720p", "1080p", "1440p", "2160p"]
-        )
+    # quality only relevant for video; downloader will accept strings like "720p"
+    if mode == "video":
+        quality = st.selectbox("Select quality", ["240p","360p","480p","720p","1080p","1440p (2K)","2160p (4K)"], index=3)
     else:
-        quality = "audio"   # audio has no quality dropdown
+        quality = "audio"
 
+    # run downloader in background thread and poll for progress
     if st.button("Start Download"):
-        if not url.strip():
-            st.error("Please enter a link")
+        if not url or not url.strip():
+            st.error("Please enter a valid YouTube URL.")
         else:
-            with st.spinner("Downloading… Please wait…"):
-                files = download_video_or_playlist(
-                    url,
-                    quality=quality if mode == "Video" else "720p",
-                    mode="video" if mode == "Video" else "audio"
-                )
+            # shared container for thread results
+            shared = {"files": None, "error": None}
 
-            st.success("Download Completed!")
+            def target():
+                try:
+                    res = download_video_or_playlist(url, quality=quality if mode=="video" else "720p", mode=mode)
+                    shared["files"] = res
+                except Exception as e:
+                    shared["error"] = str(e)
 
-            for f in files:
-                if os.path.exists(f):
-                    with open(f, "rb") as data:
-                        st.download_button(
-                            label=f"Download {os.path.basename(f)}",
-                            data=data,
-                            file_name=os.path.basename(f)
-                        )
+            thread = Thread(target=target, daemon=True)
+            thread.start()
 
-            # SAVE HISTORY
-            st.session_state.history.append({
-                "url": url,
-                "mode": mode,
-                "files": files
-            })
+            pbar = st.progress(0)
+            status = st.empty()
 
+            # Poll while thread is alive — show staged progress to indicate activity
+            stages = [10, 30, 50, 70, 90]
+            i = 0
+            while thread.is_alive():
+                p = stages[i % len(stages)]
+                pbar.progress(p)
+                status.info(f"Working... {p}%")
+                time.sleep(0.6)
+                i += 1
 
-# ---------------------------------------------------------
-# HISTORY PAGE
-# ---------------------------------------------------------
+            # thread finished
+            if shared.get("error"):
+                status.error(f"Download failed: {shared['error']}")
+                pbar.progress(0)
+            else:
+                files = shared.get("files") or []
+                # files may contain None entries — filter them out safely
+                good_files = []
+                for f in files:
+                    if not f:
+                        continue
+                    # if relative path returned, normalize
+                    if isinstance(f, str) and os.path.exists(f):
+                        good_files.append(f)
+                    else:
+                        # maybe downloader returned a filename without folder; try in downloads/
+                        candidate = os.path.join(DOWNLOAD_DIR, os.path.basename(f)) if isinstance(f, str) else None
+                        if candidate and os.path.exists(candidate):
+                            good_files.append(candidate)
+                        else:
+                            # skip missing
+                            continue
+
+                if not good_files:
+                    status.error("Download finished but no valid files were produced (all returned None or missing).")
+                    pbar.progress(0)
+                else:
+                    pbar.progress(100)
+                    status.success("Download complete.")
+                    # show download buttons & save history
+                    for fpath in good_files:
+                        try:
+                            with open(fpath, "rb") as fh:
+                                st.download_button(label=f"Save {os.path.basename(fpath)}", data=fh.read(), file_name=os.path.basename(fpath))
+                        except Exception as e:
+                            st.warning(f"Could not open {fpath}: {e}")
+
+                    add_title = os.path.basename(good_files[0])
+                    add_history_entry(add_title, mode.capitalize(), quality, good_files)
+
+    st.stop()
+
+# ---------------- History ----------------
 if page == "History":
     st.title("📜 Download History")
-
-    if len(st.session_state.history) == 0:
+    if not st.session_state.history:
         st.info("No downloads yet.")
     else:
-        for item in st.session_state.history:
-            st.write(f"**URL:** {item['url']}")
-            st.write(f"Mode: {item['mode']}")
-            for f in item['files']:
-                st.write(f"📁 {f}")
+        for entry in st.session_state.history:
+            st.write(f"**{entry['title']}** — {entry['mode']} {entry['quality']}")
+            for p in entry.get("files", []):
+                st.write(f"- {p}")
             st.markdown("---")
+    if st.button("Clear history"):
+        st.session_state.history = []
+        save_history()
+        st.success("History cleared.")
+    st.stop()
 
-
-# ---------------------------------------------------------
-# ABOUT PAGE
-# ---------------------------------------------------------
+# ---------------- About ----------------
 if page == "About":
-    st.title("👨‍💻 About Developer")
-    st.write("""
-    **Created by:** D. Abhiram  
-    **Studying:** B.Sc Computer Science  
-    **College:** SSSIHL, Nandigama Campus  
-
-    Ravana Downloader is made to be:
-    - Fast  
-    - Clean  
-    - Professional  
-    - Student-friendly  
-    """)
-
-
-
-
-
-
-
+    st.title("About")
+    st.write("Created by D. Abhiram")
+    st.write("Uses your local `downloader.py` for downloads. No cookies required.")
+    st.stop()
