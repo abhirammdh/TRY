@@ -12,11 +12,12 @@ def make_folder(folder):
 
 
 # ---------------------------------------------------------
-#  DOWNLOAD VIDEO (MP4)
+#  DOWNLOAD SINGLE VIDEO (MP4)
 # ---------------------------------------------------------
 def download_video(url, quality="720p"):
     folder = make_folder("downloads/videos")
 
+    # Convert "720p" → "720"
     height = quality.replace("p", "")
 
     ydl_opts = {
@@ -33,7 +34,7 @@ def download_video(url, quality="720p"):
 
 
 # ---------------------------------------------------------
-#  DOWNLOAD AUDIO (M4A)
+#  DOWNLOAD SINGLE AUDIO (M4A)
 # ---------------------------------------------------------
 def download_audio(url):
     folder = make_folder("downloads/audios")
@@ -56,6 +57,7 @@ def download_audio(url):
 # ---------------------------------------------------------
 def download_playlist_video(url, quality="720p"):
     folder = make_folder("downloads/playlist_videos")
+
     height = quality.replace("p", "")
 
     ydl_opts = {
@@ -103,7 +105,7 @@ def download_playlist_audio(url):
 
 
 # ---------------------------------------------------------
-#  UNIVERSAL HANDLER
+#  UNIVERSAL HANDLER (AUTO DETECT PLAYLIST)
 # ---------------------------------------------------------
 def download_video_or_playlist(url, quality="720p", mode="video"):
     is_playlist = ("playlist" in url) or ("list=" in url)
@@ -118,5 +120,3 @@ def download_video_or_playlist(url, quality="720p", mode="video"):
             return [download_video(url, quality)]
         else:
             return [download_audio(url)]
-
-
