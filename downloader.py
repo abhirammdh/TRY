@@ -3,132 +3,77 @@ import io
 import zipfile
 import shutil
 
-# ------------------------------
-# AUDIO + VIDEO QUALITY OPTIONS
-# ------------------------------
-AUDIO_OPTIONS = {
-    "64": "bestaudio[abr<=64]/bestaudio",
-    "128": "bestaudio[abr<=128]/bestaudio",
-    "192": "bestaudio[abr<=192]/bestaudio",
-    "256": "bestaudio[abr<=256]/bestaudio",
-    "320": "bestaudio[abr<=320]/bestaudio",
-}
 VIDEO_OPTIONS = {
-    "144p": "bestvideo[height<=144]+bestaudio/best",
-    "240p": "bestvideo[height<=240]+bestaudio/best",
-    "360p": "bestvideo[height<=360]+bestaudio/best",
-    "480p": "bestvideo[height<=480]+bestaudio/best",
-    "720p": "bestvideo[height<=720]+bestaudio/best",
-    "1080p": "bestvideo[height<=1080]+bestaudio/best",
-    "1440p (2K)": "bestvideo[height<=1440]+bestaudio/best",
-    "2160p (4K)": "bestvideo[height<=2160]+bestaudio/best",
-    "Best": "bestvideo+bestaudio/best",
+    "144p": "best[height<=144][ext=mp4]/best[height<=144]",
+    "240p": "best[height<=240][ext=mp4]/best[height<=240]",
+    "360p": "best[height<=360][ext=mp4]/best[height<=360]",
+    "480p": "best[height<=480][ext=mp4]/best[height<=480]",
+    "720p": "best[height<=720][ext=mp4]/best[height<=720]",
+    "1080p": "best[height<=1080][ext=mp4]/best[height<=1080]",
+    "1440p (2K)": "best[height<=1440][ext=mp4]/best[height<=1440]",
+    "2160p (4K)": "best[height<=2160][ext=mp4]/best[height<=2160]",
+    "Best": "best[ext=mp4]/best",
 }
 
-def download_video_or_playlist(
-    url,
-    download_path='downloads',
-    download_type='video',
-    quality='Best',
-    content_type='Video',
-    zip_output=False,
-    zip_filename="downloaded_videos.zip",
-    progress_hook=None  # Ensure this param is here
-):
-    """
-    Download a single video/audio or playlist from YouTube with progress hook.
-    
-    Args:
-        ... (existing)
-        progress_hook: Function to call on progress updates (yt-dlp hook).
-    
-    Returns:
-        Tuple: (data_or_files, titles)
-    """
-    import yt_dlp  # Safe import inside function
-    # ------------------------------
-    # CLEAN FOLDER BEFORE DOWNLOAD
-    # ------------------------------
+def download_video_or_playlist(url, download_path='downloads', download_type='video', quality='Best', content_type='Video', zip_output=False, zip_filename="videos.zip", progress_hook=None):
+    import yt_dlp
     if os.path.exists(download_path):
         shutil.rmtree(download_path)
     os.makedirs(download_path, exist_ok=True)
     
-    # ------------------------------
-    # FORMAT SELECTION
-    # ------------------------------
-    if download_type == "audio":
-        ydl_format = AUDIO_OPTIONS.get(quality, "bestaudio")
-    else:
-        ydl_format = VIDEO_OPTIONS.get(quality, "best")
-    
+    ydl_format = VIDEO_OPTIONS.get(quality, "best[ext=mp4]/best")
     is_playlist = (content_type == "Playlist")
     
-    # ------------------------------
-    # YT-DLP OPTIONS
-    # ------------------------------
+    # First, extract info to get titles and thumbnails (no download yet)
+    info_opts = {
+        "quiet": True,
+        "extract_flat": False,
+        "noplaylist": not is_playlist,
+        "ignoreerrors": True,
+    }
+    with yt_dlp.YoutubeDL(info_opts) as ydl_info:
+        info = ydl_info.extract_info(url, download=False)
+    
+    titles = []
+    thumbnails = []
+    if is_playlist and "entries" in info:
+        for entry in info["entries"]:
+            if entry:
+                titles.append(entry.get("title", "Unknown"))
+                thumbnails.append(entry.get("thumbnail", None))
+    else:
+        titles = [info.get("title", "Unknown")]
+        thumbnails = [info.get("thumbnail", None)]
+    
+    # Now download with progress
     ydl_opts = {
         "format": ydl_format,
         "ignoreerrors": True,
         "quiet": True,
         "outtmpl": os.path.join(download_path, "%(title)s.%(ext)s"),
         "noplaylist": not is_playlist,
-        "extract_flat": False,  # Download full info
-        "progress_hooks": [progress_hook] if progress_hook else [],  # Add hook
+        "progress_hooks": [progress_hook] if progress_hook else [],
+        "no_warnings": True,
+        "merge_output_format": None,
     }
     
-    # Suppress FFmpeg warnings minimally
-    ydl_opts["no_warnings"] = False
-    
-    # ------------------------------
-    # APPLY MP3 POSTPROCESSOR (DYNAMIC QUALITY)
-    # ------------------------------
-    if download_type == "audio":
-        ydl_opts["postprocessors"] = [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": quality,  # Use selected quality (e.g., "128")
-        }]
-    
-    # ------------------------------
-    # DOWNLOAD
-    # ------------------------------
-    playlist_titles = []
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=True)
-            # Collect titles (for single or playlist)
-            if is_playlist and "entries" in info:
-                playlist_titles = [e.get("title", "Unknown") for e in info["entries"] if e]
-            else:
-                playlist_titles = [info.get("title", "Unknown")]
+            ydl.download([url])
     except Exception as e:
-        print(f"Download error: {e}")  # Log for debugging
-        return None, []
+        print(f"Error: {e}")
+        return None, titles, thumbnails
     
-    # ------------------------------
-    # COLLECT DOWNLOADED FILES
-    # ------------------------------
-    downloaded_files = []
-    for root, _, files in os.walk(download_path):
-        for f in files:
-            downloaded_files.append(os.path.join(root, f))
+    files = [os.path.join(root, f) for root, _, fs in os.walk(download_path) for f in fs]
+    if not files:
+        return None, titles, thumbnails
     
-    if not downloaded_files:
-        return None, playlist_titles
+    if zip_output and is_playlist and len(files) > 1:
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as z:
+            for f in files:
+                z.write(f, os.path.basename(f))
+        buffer.seek(0)
+        return buffer.getvalue(), titles, thumbnails
     
-    # ------------------------------
-    # ZIP OUTPUT (USE PROVIDED FILENAME)
-    # ------------------------------
-    if zip_output and is_playlist and len(downloaded_files) > 1:
-        zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as z:
-            for file in downloaded_files:
-                z.write(file, os.path.basename(file))
-        zip_buffer.seek(0)
-        zip_data = zip_buffer.getvalue()  # Return bytes for easy use in Streamlit
-        return zip_data, playlist_titles
-    
-    # For single or non-zip playlist: return first file if single, else list
-    if not is_playlist:
-        return downloaded_files[0], playlist_titles
-    return downloaded_files, playlist_titles
+    return files[0] if not is_playlist else files, titles, thumbnails
